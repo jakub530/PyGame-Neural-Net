@@ -145,6 +145,8 @@ class UI_elems:
 
         self.default_colors = self.parse_colors(**kwargs)
 
+        self.elems = {}
+
     def parse_colors(self,**kwargs):
         new_colors = copy.deepcopy(self.default_colors)
         for elem in new_colors.colors:
@@ -156,6 +158,18 @@ class UI_elems:
                     new_colors.colors[elem]["active"] = kwargs[elem]
                     new_colors.colors[elem]["inactive"] = kwargs[elem]
         return new_colors
+
+    def add_elem(self, loc, box_name, elem_type, **kwargs):
+        params, colors = self.parse_default_args(**kwargs)
+
+        new_box = elem_type(loc, colors, params)
+        box_name = str(box_name)
+        while(True):
+            if box_name in self.elems:
+                box_name = box_name + "_bis"
+            else:
+                self.elems[box_name] = new_box
+                return
 
     def parse_default_args(self,**kwargs):
         params = {}
@@ -173,24 +187,15 @@ class text_boxes(UI_elems):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.boxes = {}
+        
 
     def add_box(self, loc, box_name, **kwargs):
-        params, colors = super().parse_default_args(**kwargs)
-
-        new_box = UI_elem(loc, colors, params)
-        box_name = str(box_name)
-        while(True):
-            if box_name in self.boxes:
-                box_name = box_name + "_bis"
-            else:
-                self.boxes[box_name] = new_box
-                return
+        super().add_elem(loc, box_name, UI_elem, **kwargs)
 
     def check_events(self, event):
         if event.type == pg.MOUSEBUTTONDOWN:
                 # If the user clicked on the input_box rect.
-            for input_box in self.boxes.values():
+            for input_box in self.elems.values():
                 if input_box.interact == True:
                     if input_box.rect.collidepoint(event.pos):
                         # Toggle the active variable.
@@ -198,7 +203,7 @@ class text_boxes(UI_elems):
                     else:
                         input_box.change_active(False)
         if event.type == pg.KEYDOWN:
-            for input_box in self.boxes.values():
+            for input_box in self.elems.values():
                 if input_box.active:
                     if event.key == pg.K_RETURN:
                         print(input_box.text)
@@ -209,11 +214,11 @@ class text_boxes(UI_elems):
                         input_box.update_text(input_box.text + event.unicode)
 
     def display_boxes(self, screen):
-        for input_box in self.boxes.values():
+        for input_box in self.elems.values():
             input_box.display_elem(screen)
 
     def get_texbox_value(self, key):
-        if key in self.boxes:
+        if key in self.elems:
             return self.boxes[key].text
         else:
             print("Box with identifier {key} not found".format(key = key))
@@ -225,29 +230,27 @@ class text_boxes(UI_elems):
         
 
 
-class button:
+class button(UI_elem):
+    def __init__(self, loc, colors, params, func, button_args, button_output, **kwargs):
+        super().__init__(loc, colors, params, **kwargs)
+        self.func = func
+
+class buttons(UI_elems):
     def __init__(self, **kwargs):
-        pass
+        super().__init__(**kwargs)
 
-class buttons:
-    def __init__(self, **kwargs):
-        self.default_font_size = 32
-        self.default_color = pg.Color('dodgerblue2') 
-        self.default_color_grad = pg.Color('lightskyblue3')
-        self.default_match_size = True
-        self.default_min_width = False
-        self.default_size = (200, 50)
-        self.default_use_grad = True
-        self.default_text_color = pg.Color('white')
-
-        for elem in vars(self):
-            if elem in kwargs:
-                setattr(self, elem, kwargs[elem])
-
-        self.buttons = {}
-
-    def add_button(self, loc, text, **kwargs):
-        pass
+    def add_button(self, loc, func, button_args, button_output, **kwargs):
+        params, colors = super().parse_default_args(**kwargs)
+        if params["text"] == "":
+            params["text"] = "button_"+str(len(self.elems))
+        new_button = elem_type(loc, colors, params)
+        button_name = str(button_name)
+        while(True):
+            if button_name in self.elems:
+                button_name = button_name + "_bis"
+            else:
+                self.elems[button_name] = new_button
+                return
 
 
 def init_pygame(size):
