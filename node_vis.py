@@ -19,12 +19,10 @@ def transform_color(color):
     mult = 0.7
     return color * mult
 
-
-
 class node_vis(nn_lib.node):
     def __init__(self):
-        self.val =  random.random() - 0.5
-        #self.val = -1
+        #self.val =  random.random() - 0.5
+        self.val = 0
 
     def set_pos(self,pos,offset):
         self.pos = pos
@@ -34,7 +32,6 @@ class node_vis(nn_lib.node):
         self.radius = int(diameter/2)
 
     def draw_node(self, offset, min_val, max_val, surface, img, color_img):
-        
         self.color = set_color(self.val, min_val, max_val)
         self.draw_circles_pygame(surface)
         #self.draw_circles_import(surface, img, color_img)
@@ -46,10 +43,8 @@ class node_vis(nn_lib.node):
 
     def draw_circles_import(self, surface, img, color_img):
         new_img = img.copy()
-        
         color_img.fill(self.color)
         new_img.blit(color_img, (0,0), special_flags = pygame.BLEND_RGBA_MULT)
-        
         surface.blit(new_img, self.trans_pos-np.array([self.radius,self.radius]))
 
     def draw_circle(self, surface, radius, color):
@@ -67,7 +62,6 @@ class layer_vis(nn_lib.layer):
             self.nodes.append(node_vis())
 
     def set_pos(self, node_size, h_pos, v_pos, offset):
-
         for ind, pos in enumerate(v_pos):
             self.nodes[ind].set_pos(np.array([h_pos, pos]), offset)
             self.nodes[ind].set_size(node_size)
@@ -85,11 +79,11 @@ class nn_vis(nn_lib.nn):
         self.init_graphics(path)
         self.setup_text_boxes(text_boxes)
 
-    def update_and_draw(self, txt_boxes, values, event_flag, mock_val):
+    def update_and_draw(self, txt_boxes, values, mock_val):
         self.set_node_val(values)
         self.draw_connections(mock_val)
         self.draw_nodes(offset)
-        self.update_txt_values(txt_boxes, event_flag)
+        self.update_txt_values(txt_boxes)
 
 
     def init_layers(self, h_layers, inputs, outputs, layer_type):
@@ -201,7 +195,6 @@ class nn_vis(nn_lib.nn):
         thick = max(int(max_thickness * val/maximum), 1)
         color = base_color * int(255 * (val/maximum))
 
-        #new_color = (np.array([1,1,1]) * abs(val) * 255)
 
         pygame.draw.line(self.surface, color, prev_node.trans_pos, next_node.trans_pos, thick)
 
@@ -228,17 +221,24 @@ class nn_vis(nn_lib.nn):
             text = text + "0"
         return text
 
-    def update_txt_values(self, all_text_boxes, event_flag):
-        if event_flag == True:
-            for ind, node in enumerate(self.layers[0].nodes):
-                text = str(np.around(node.val,2))
-                text = self.format_text(text)
-                all_text_boxes.elems["input_"+str(ind)].update_text(text)
+    def update_txt_values(self, all_text_boxes):
+        name = ["input", "output"]
+        for layer_ind, layer in enumerate([self.layers[0], self.layers[-1]]):
+            for ind, node in enumerate(layer.nodes):
+                if all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].active == False:
+                    text = str(np.around(node.val,2))
+                    text = self.format_text(text)
+                    all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].update_text(text)
 
-            for ind, node in enumerate(self.layers[-1].nodes):
-                text = str(np.around(node.val,2))
-                text = self.format_text(text)
-                all_text_boxes.elems["output_"+str(ind)].update_text(text)
+        #for ind, node in enumerate(self.layers[0].nodes):
+        #    if all_text_boxes.elems["input_"+str(ind)].active == False:
+        #        text = str(np.around(node.val,2))
+        #        text = self.format_text(text)
+        #        all_text_boxes.elems["input_"+str(ind)].update_text(text)
+        #for ind, node in enumerate(self.layers[-1].nodes):
+        #    text = str(np.around(node.val,2))
+        #    text = self.format_text(text)
+        #    all_text_boxes.elems["output_"+str(ind)].update_text(text)
 
     def update_inputs(self, all_text_boxes, event_flag, inputs):
         if(event_flag == True):
@@ -292,7 +292,7 @@ def init_UI(text_boxes):
     buttons.add_box((300, 60 ),"increase_inst", change_instance_up,   text = "+", min_width = 50, centre_text = True)
     buttons.add_box((360, 60),"decrease_inst", change_instance_down, text = "-", min_width = 50, centre_text = True)
 
-    pass
+
 
 if __name__ == "__main__":
     size = (2000, 1000)
@@ -304,9 +304,9 @@ if __name__ == "__main__":
     global_args = {}
     global_args["inst_number"] = 0
     global_args["gen_number"] = 0
-
+    
     input_number = 2
-    hidden_layers = [4,4,4]
+    hidden_layers = [4,4,4] 
     outputs = 1
     inputs = np.random.uniform(-0.2,0.2,input_number)
 
@@ -345,7 +345,7 @@ if __name__ == "__main__":
 
         inputs = my_nn_vis.update_inputs(text_boxes, event_flag, inputs)
         output, all_values = current_gen.instances[global_args["inst_number"]].calculate_output(inputs)
-        my_nn_vis.update_and_draw(text_boxes, all_values, True, global_args["weights"])
+        my_nn_vis.update_and_draw(text_boxes, all_values, global_args["weights"])
 
         text_boxes.display_boxes(screen, global_args)
         buttons.display_boxes(screen, global_args)
