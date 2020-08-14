@@ -66,6 +66,7 @@ class UI_elem:
         self.gap = 5
         self.border_width = 2
         self.loc = loc
+        self.global_arg = params["global_arg"]
         self.font = pg.font.Font(None, params["font_size"])
         self.colors = colors
         self.use_frame = params["use_frame"]
@@ -120,7 +121,12 @@ class UI_elem:
             free_space_y = self.height - self.txt_surface.get_height()
             self.text_loc = (self.rect.x + int(free_space_x/2), self.rect.y + int(free_space_y/2))
 
-    def display_elem(self, screen):
+    def display_elem(self, screen, global_args):
+        if self.global_arg != None:
+            if self.global_arg in global_args:
+                self.update_text(str(global_args[self.global_arg]))
+            else:
+                self.update_text("Arg \"{arg}\"not found".format(arg = self.global_arg))
         if self.use_background:
             if self.use_gradient:
                 fill_gradient(screen, self.colors.colors["background_c"][self.get_active()], self.colors.colors["gradient_c"][self.get_active()], self.rect)
@@ -130,6 +136,7 @@ class UI_elem:
         if self.use_frame:
             pg.draw.rect(screen, self.colors.colors["frame_c"][self.get_active()], self.rect, self.border_width)
         screen.blit(self.txt_surface, self.text_loc)
+
 
 class UI_elems:
     def __init__(self, **kwargs):
@@ -145,6 +152,7 @@ class UI_elems:
         self.default_text = ""
         self.default_interact = True
         self.default_centre_text = False
+        self.default_global_arg = None
 
         for elem in vars(self):
             if elem in kwargs:
@@ -170,13 +178,18 @@ class UI_elems:
         params, colors = self.parse_default_args(**kwargs)
 
         new_box = elem_type(loc, colors, params)
-        box_name = str(box_name)
+        unique_name = self.uniqify_name(box_name)
+        self.elems[unique_name] = new_box
+        
+
+    def uniqify_name(self, name):
+        name = str(name)
         while(True):
-            if box_name in self.elems:
-                box_name = box_name + "_bis"
+            if name in self.elems:
+                name = name + "_bis"
             else:
-                self.elems[box_name] = new_box
-                return
+                return name
+
 
     def parse_default_args(self,**kwargs):
         params = {}
@@ -188,13 +201,15 @@ class UI_elems:
                     params[arg] = kwargs[arg]
                 else:
                     params[arg] = getattr(self, full_arg)
-        return params, elem_colors    
+        return params, elem_colors  
+
+    def display_boxes(self, screen, global_args = {}):
+        for input_box in self.elems.values():
+            input_box.display_elem(screen, global_args)  
 
 class text_boxes(UI_elems):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        
 
     def add_box(self, loc, box_name, **kwargs):
         super().add_elem(loc, box_name, UI_elem, **kwargs)
@@ -223,10 +238,6 @@ class text_boxes(UI_elems):
                     else:
                         input_box.update_text(input_box.text + event.unicode)
 
-    def display_boxes(self, screen):
-        for input_box in self.elems.values():
-            input_box.display_elem(screen)
-
     def get_texbox_value(self, key):
         if key in self.elems:
             return self.elems[key].text
@@ -235,26 +246,35 @@ class text_boxes(UI_elems):
 
 
 class button(UI_elem):
-    def __init__(self, loc, colors, params, func, button_args, button_output, **kwargs):
+    def __init__(self, loc, colors, params, func, **kwargs):
         super().__init__(loc, colors, params, **kwargs)
         self.func = func
 
 class buttons(UI_elems):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        #self.default_func = None
 
-    def add_button(self, loc, func, button_args, button_output, **kwargs):
+    def add_box(self, loc, button_name, func, **kwargs):
         params, colors = super().parse_default_args(**kwargs)
         if params["text"] == "":
             params["text"] = "button_"+str(len(self.elems))
-        new_button = elem_type(loc, colors, params)
-        button_name = str(button_name)
-        while(True):
-            if button_name in self.elems:
-                button_name = button_name + "_bis"
-            else:
-                self.elems[button_name] = new_button
-                return
+        new_button = button(loc, colors, params, func)
+        unique_name = super().uniqify_name(button_name)
+        self.elems[unique_name] = new_button
+
+    def check_events(self, event, global_args):
+        if event.type == pg.MOUSEBUTTONDOWN:
+            for button_box in self.elems.values():
+                if button_box.interact == True:
+                    if button_box.rect.collidepoint(event.pos):
+                        button_box.change_active(not button_box.active)
+                        button_box.func(button_box, global_args)
+
+        if event.type == pg.MOUSEBUTTONUP:
+            for button_box in self.elems.values():
+                if button_box.active:
+                    button_box.change_active(False)
 
 
 def init_pygame(size):

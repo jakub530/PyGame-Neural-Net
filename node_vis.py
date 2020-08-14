@@ -77,7 +77,7 @@ class layer_vis(nn_lib.layer):
             node.draw_node(offset, min_val, max_val, surface, img, color_img)
 
 class nn_vis(nn_lib.nn):
-    def __init__(self, surface, h_layers, inputs, outputs, offset, text_boxes, box_dim = (600,400),gaps = (10,10), path = 'Graphics/Node_Grad_2.png'):
+    def __init__(self, surface, h_layers, inputs, outputs, offset, text_boxes, box_dim = (600,400),gaps = (30,10), path = 'Graphics/Node_Grad_2.png'):
         self.surface = surface
         self.offset = offset
         self.init_layers(h_layers, inputs, outputs, layer_vis)
@@ -271,7 +271,28 @@ def draw_others(surface, size, box_dim):
     rect = pygame.Rect(size[0]-box_dim[0],0,box_dim[0],box_dim[1])
     pygame_lib.fill_gradient(surface, pygame.Color("lightgray"), pygame.Color("slategray"), rect)
     pygame.draw.rect(surface, pygame.Color("dimgray"),rect,5)
+    
 
+def change_instance_up(button, global_params):
+    if(global_params["inst_number"] < len(current_gen.instances)-1):
+        global_params["inst_number"] = int(global_params["inst_number"]) + 1
+        global_params["weights"] = current_gen.instances[global_args["inst_number"]].extract_weights()
+
+def change_instance_down(button, global_params):
+    if global_params["inst_number"] > 0 :
+        global_params["inst_number"] = int(global_params["inst_number"]) - 1
+        global_params["weights"] = current_gen.instances[global_args["inst_number"]].extract_weights()
+
+def init_UI(text_boxes):
+    text_boxes.add_box((20,20),"gen_label", text = "Generation", interact = False)
+    text_boxes.add_box((240,20),"gen_index", global_arg = "gen_number", min_width = 50, interact = False)
+    text_boxes.add_box((240,60),"gen_index", global_arg = "inst_number", min_width = 50, interact = False)
+    text_boxes.add_box((20,60),"instance_label", text = "Instance", interact = False)
+    
+    buttons.add_box((300, 60 ),"increase_inst", change_instance_up,   text = "+", min_width = 50, centre_text = True)
+    buttons.add_box((360, 60),"decrease_inst", change_instance_down, text = "-", min_width = 50, centre_text = True)
+
+    pass
 
 if __name__ == "__main__":
     size = (2000, 1000)
@@ -280,29 +301,41 @@ if __name__ == "__main__":
     screen, clock  = pygame_lib.init_pygame(size)
     offset = (size[0]-box_dim[0], 0)
     
-    input_number = 5
-    hidden_layers = [3,5]
-    outputs = 3
+    global_args = {}
+    global_args["inst_number"] = 0
+    global_args["gen_number"] = 0
+
+    input_number = 2
+    hidden_layers = [4,4,4]
+    outputs = 1
     inputs = np.random.uniform(-0.2,0.2,input_number)
 
-    my_nn = nn_lib.nn(hidden_layers, input_number, outputs, True)
+    my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, 50, 0)
+    current_gen = my_nn.generations[global_args["gen_number"]]
+    #my_nn = first_gen[0]
 
-    all_text_boxes = pygame_lib.text_boxes(default_centre_text = True)
-    my_nn_vis = nn_vis(screen, hidden_layers, input_number,outputs , offset ,all_text_boxes, box_dim)
+    text_boxes = pygame_lib.text_boxes(default_centre_text = True)
+    buttons = pygame_lib.buttons()
+    init_UI(text_boxes)
+    
 
-    weights = my_nn.extract_weights()
+    my_nn_vis = nn_vis(screen, hidden_layers, input_number,outputs , offset ,text_boxes, box_dim)
+
+    global_args["weights"] = current_gen.instances[global_args["inst_number"]].extract_weights()
 
     break_flag = False
     event_flag = False
     start_flag = True
     while 1:
         t = clock.tick(120)
+        global_args["time"] = t
         #print(t)
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 break_flag = True
                 pygame.quit()
-            event_flag = all_text_boxes.check_events(event)
+            event_flag = text_boxes.check_events(event)
+            buttons.check_events(event, global_args)
                 
         if(break_flag):
             break      
@@ -310,11 +343,12 @@ if __name__ == "__main__":
         screen.fill((60,60,60 ))
         draw_others(screen,size,box_dim)
 
-        inputs = my_nn_vis.update_inputs(all_text_boxes, event_flag, inputs)
-        output, all_values = my_nn.calculate_output(inputs)
-        my_nn_vis.update_and_draw(all_text_boxes, all_values, event_flag or start_flag, weights)
+        inputs = my_nn_vis.update_inputs(text_boxes, event_flag, inputs)
+        output, all_values = current_gen.instances[global_args["inst_number"]].calculate_output(inputs)
+        my_nn_vis.update_and_draw(text_boxes, all_values, True, global_args["weights"])
 
-        all_text_boxes.display_boxes(screen)
+        text_boxes.display_boxes(screen, global_args)
+        buttons.display_boxes(screen, global_args)
         pygame.display.flip()
         start_flag = False
     

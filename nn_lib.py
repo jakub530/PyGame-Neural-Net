@@ -63,7 +63,7 @@ class layer:
             node.modify_weights()
 
 class nn:
-    def __init__(self, h_layers, inputs, outputs, init_weights):
+    def __init__(self, h_layers, inputs, outputs, init_weights = True):
         self.init_layers(h_layers, inputs, outputs, layer)
         if init_weights:
             self.init_weights()
@@ -105,6 +105,22 @@ class nn:
                 layer_list.append(node_list)
             weight_list.append(layer_list)
         return weight_list
+
+class nn_generation:
+    def __init__(self, h_layers, inputs, outputs, inst_count):
+        self.instances = []
+        for ind in range(inst_count):
+            self.instances.append(nn(h_layers, inputs, outputs))
+
+
+
+class nn_tmp:
+    def __init__(self, h_layers, inputs, outputs, inst_count, model_values):
+        self.generations = [nn_generation(h_layers, inputs, outputs, inst_count)]
+        self.model_values = model_values
+
+    def get_model_values(self):
+        return model_values
             
 
 if __name__ == "__main__":
@@ -112,15 +128,16 @@ if __name__ == "__main__":
     hidden_layers = [2,2]
     outputs = 1
 
-    my_nn = nn(hidden_layers, inputs, outputs)
-    my_nn.init_weights()
-    my_new_nn = copy.deepcopy(my_nn)
-    output, all_values = my_nn.calculate_output(np.array([1,3]))
-    weights = my_nn.extract_weights()
-    print(output)
-    for i in range(1000):
-        my_nn.modify_weights()
-        output, all_values = my_nn.calculate_output(np.array([1,3]))
-        print(output)
+    nn_obj = nn_tmp(hidden_layers, inputs, outputs, 20)
+    #my_nn = nn(hidden_layers, inputs, outputs)
+    #my_nn.init_weights()
+    #my_new_nn = copy.deepcopy(my_nn)
+    #output, all_values = my_nn.calculate_output(np.array([1,3]))
+    #weights = my_nn.extract_weights()
+    #print(output)
+    #for i in range(1000):
+    #    my_nn.modify_weights()
+    #    output, all_values = my_nn.calculate_output(np.array([1,3]))
+    #    print(output)
     print("Tested")
-    pass
+    #pass
