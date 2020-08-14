@@ -75,6 +75,7 @@ class UI_elem:
         self.match_size = params["match_size"]
         self.default_size = params["size"]
         self.min_width = params["min_width"]
+        self.centre_text = params["centre_text"]
         self.active = False
         self.interact = params["interact"]
         self.find_height()
@@ -105,16 +106,21 @@ class UI_elem:
         self.text = new_text
         self.txt_surface = self.font.render(self.text, True, self.colors.colors["text_c"][self.get_active()])
         self.set_box()
+        self.set_text_loc()
     
     def change_active(self, new_state):
         self.active = new_state
         self.update_text(self.text)
 
     def set_text_loc(self):
-        self.text_loc = (self.rect.x + self.gap, self.rect.y + self.gap)
+        if self.centre_text == False:
+            self.text_loc = (self.rect.x + self.gap, self.rect.y + self.gap)
+        else:
+            free_space_x = self.width - self.txt_surface.get_width()
+            free_space_y = self.height - self.txt_surface.get_height()
+            self.text_loc = (self.rect.x + int(free_space_x/2), self.rect.y + int(free_space_y/2))
 
     def display_elem(self, screen):
-        
         if self.use_background:
             if self.use_gradient:
                 fill_gradient(screen, self.colors.colors["background_c"][self.get_active()], self.colors.colors["gradient_c"][self.get_active()], self.rect)
@@ -138,6 +144,7 @@ class UI_elems:
         self.default_min_width = 200
         self.default_text = ""
         self.default_interact = True
+        self.default_centre_text = False
 
         for elem in vars(self):
             if elem in kwargs:
@@ -200,14 +207,17 @@ class text_boxes(UI_elems):
                     if input_box.rect.collidepoint(event.pos):
                         # Toggle the active variable.
                         input_box.change_active(not input_box.active)
+                        input_box.update_text("")
                     else:
                         input_box.change_active(False)
         if event.type == pg.KEYDOWN:
             for input_box in self.elems.values():
                 if input_box.active:
                     if event.key == pg.K_RETURN:
-                        print(input_box.text)
-                        input_box.update_text('')
+                        #print(input_box.text)
+                        #input_box.update_text('')
+                        input_box.active = False
+                        return True
                     elif event.key == pg.K_BACKSPACE:
                         input_box.update_text(input_box.text[:-1])
                     else:
@@ -219,15 +229,9 @@ class text_boxes(UI_elems):
 
     def get_texbox_value(self, key):
         if key in self.elems:
-            return self.boxes[key].text
+            return self.elems[key].text
         else:
-            print("Box with identifier {key} not found".format(key = key))
-
-
-                
-
-
-        
+            print("TextBox with identifier {key} not found".format(key = key))
 
 
 class button(UI_elem):

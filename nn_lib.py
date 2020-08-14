@@ -63,8 +63,10 @@ class layer:
             node.modify_weights()
 
 class nn:
-    def __init__(self, h_layers, inputs, outputs):
+    def __init__(self, h_layers, inputs, outputs, init_weights):
         self.init_layers(h_layers, inputs, outputs, layer)
+        if init_weights:
+            self.init_weights()
 
     def init_layers(self, h_layers, inputs, outputs, layer_type):
         self.layers = [layer_type(inputs)]

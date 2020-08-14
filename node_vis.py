@@ -20,26 +20,37 @@ def transform_color(color):
     return color * mult
 
 
+
 class node_vis(nn_lib.node):
     def __init__(self):
         self.val =  random.random() - 0.5
         #self.val = -1
 
-    def set_pos(self,pos):
+    def set_pos(self,pos,offset):
         self.pos = pos
+        self.trans_pos = offset + self.pos
 
     def set_size(self, diameter):
         self.radius = int(diameter/2)
 
-    def draw_node(self, offset, min_val, max_val, surface):
-        self.trans_pos = offset + self.pos
+    def draw_node(self, offset, min_val, max_val, surface, img, color_img):
+        
         self.color = set_color(self.val, min_val, max_val)
-        self.draw_circles(surface)
+        self.draw_circles_pygame(surface)
+        #self.draw_circles_import(surface, img, color_img)
 
-    def draw_circles(self, surface):
+    def draw_circles_pygame(self, surface):
         self.draw_circle(surface,self.radius,transform_color(self.color))
         radius_mult = 0.8
         self.draw_circle(surface,int(self.radius * radius_mult),self.color)
+
+    def draw_circles_import(self, surface, img, color_img):
+        new_img = img.copy()
+        
+        color_img.fill(self.color)
+        new_img.blit(color_img, (0,0), special_flags = pygame.BLEND_RGBA_MULT)
+        
+        surface.blit(new_img, self.trans_pos-np.array([self.radius,self.radius]))
 
     def draw_circle(self, surface, radius, color):
         gfxdraw.aacircle(surface, *self.trans_pos, radius, color)
@@ -55,154 +66,256 @@ class layer_vis(nn_lib.layer):
         for ind in range(self.size):
             self.nodes.append(node_vis())
 
-    def set_pos(self, box_dim, gaps, node_size, h_pos):
-        v_gap = int((box_dim[1] - (self.size) * node_size) / (self.size + 1) )
-        v_pos = [v_gap + (v_gap + node_size) * i for i in range(self.size)]
+    def set_pos(self, node_size, h_pos, v_pos, offset):
 
         for ind, pos in enumerate(v_pos):
-            self.nodes[ind].set_pos(np.array([h_pos, pos]))
+            self.nodes[ind].set_pos(np.array([h_pos, pos]), offset)
             self.nodes[ind].set_size(node_size)
 
-    def draw_layer(self, offset, min_val, max_val, surface):
+    def draw_layer(self, offset, min_val, max_val, surface, img, color_img):
         for node in self.nodes:
-            node.draw_node(offset, min_val, max_val, surface)
+            node.draw_node(offset, min_val, max_val, surface, img, color_img)
 
 class nn_vis(nn_lib.nn):
-    def __init__(self, surface, h_layers, inputs, outputs, box_dim = (600,400), gaps = (10,10)):
+    def __init__(self, surface, h_layers, inputs, outputs, offset, text_boxes, box_dim = (600,400),gaps = (10,10), path = 'Graphics/Node_Grad_2.png'):
         self.surface = surface
+        self.offset = offset
         self.init_layers(h_layers, inputs, outputs, layer_vis)
         self.calculate_grid(box_dim, gaps)
+        self.init_graphics(path)
+        self.setup_text_boxes(text_boxes)
+
+    def update_and_draw(self, txt_boxes, values, event_flag, mock_val):
+        self.set_node_val(values)
+        self.draw_connections(mock_val)
+        self.draw_nodes(offset)
+        self.update_txt_values(txt_boxes, event_flag)
+
 
     def init_layers(self, h_layers, inputs, outputs, layer_type):
         super().init_layers(h_layers, inputs, outputs, layer_type)
 
-    def calculate_grid(self, box_dim, gaps):
-        max_v = int((box_dim[0] - (self.layer_number + 1) * gaps[0]) / self.layer_number )
-        self.max_layer = max(self.layers[i].size for i in range(self.layer_number))
-        max_h = int((box_dim[1] - (self.max_layer + 1) * gaps[1]) / self.max_layer )
+    def init_graphics(self, path):
+        node_img = pygame.image.load(path)
+        self.node_img = pygame.transform.scale(node_img,(self.node_size,self.node_size))
+        self.color_img = pygame.Surface(node_img.get_size()).convert_alpha()  
+
+    def calculate_max_size(self, box_dim, gap, frame, inst, txt_box_mult = 0, txt_box_num = 0):
+        full_space = box_dim
+        framed_space = box_dim - 2 * frame
+        space_after_gaps = framed_space - gap * (inst + 1 + txt_box_num) #due to 2 textboxes present
+        max_size = int(space_after_gaps / (inst + txt_box_num * txt_box_mult)) # Assumptiopn that each text box takes 1.5 x node space
+        return max_size
+
+    def calculate_gap(self, dim, size, inst, frame, txt_box_mult = 0, txt_box_num = 0):
+        available_space = dim - size * inst - size * txt_box_mult * txt_box_num - 2 * frame
+        gap = int(available_space / (inst + txt_box_num + 1))
+        return gap
+
+    def calculate_node_h_pos(self, size, gap, inst, frame, txt_box_mult):
+        #calculates centres of the circles
+        start_offset =  int(frame + 2 * gap + size * (0.5 + txt_box_mult)) # offset by txt_box and radius of circle
+        h_pos = [start_offset + i * (gap + size) for i in range(inst)]
+        return h_pos
+
+    def calibrate_font(self, txt_box_mult, size):
+        font_size = 1
+        mock_text = "-0.30"
+        while(1):
+            font = pygame.font.Font(None, font_size)
+            txt_surface = font.render(mock_text, True, pygame.Color("white"))
+            #print(str(txt_surface.get_width()) + str(txt_surface.get_height()))
+            if txt_surface.get_width() > txt_box_mult * size or (20 + txt_surface.get_height()) > size * 0.8:
+                self.font_size = font_size
+                self.txt_field_size = (txt_surface.get_width() + 10 , txt_surface.get_height() + 10)
+                return
+            else:
+                font_size += 1
+
+    def calculate_txt_pos(self, frame, box_dim):
+        self.txt_s_h_pos = frame + self.h_gap # tenatively for now 
+        self.txt_s_v_pos = []
+        for v_pos in self.v_pos[0]:
+            tmp_v_pos = v_pos - self.txt_field_size[1] / 2 
+            self.txt_s_v_pos.append(tmp_v_pos)
+
+        self.txt_e_h_pos = self.h_pos[-1] + self.h_gap + self.node_size/2
+        self.txt_e_v_pos = []
+        for v_pos in self.v_pos[-1]:
+            tmp_v_pos = v_pos - self.txt_field_size[1] / 2 
+            self.txt_e_v_pos.append(tmp_v_pos)
+
+        return 
+
+    def calculate_grid(self, box_dim, gaps, frame = 5, txt_box_mult = 1.5, txt_box_num = 2):
+        self.largest_layer = max(self.layers[i].size for i in range(self.layer_number))
+        max_h = self.calculate_max_size(box_dim[0], gaps[0], frame, self.layer_number, txt_box_mult, txt_box_num)
+        max_v = self.calculate_max_size(box_dim[1], gaps[1], frame, self.largest_layer)
+
         self.node_size = min(max_v, max_h)
 
-        h_gap = int((box_dim[0] - (self.layer_number) * self.node_size) / (self.layer_number + 1) )
-        h_pos = [h_gap + (h_gap + self.node_size) * i for i in range(self.layer_number)]
+        self.h_gap = self.calculate_gap(box_dim[0], self.node_size, self.layer_number, frame, txt_box_mult, txt_box_num)
+        self.h_pos = self.calculate_node_h_pos(self.node_size, self.h_gap, self.layer_number, frame, txt_box_mult)
 
+        self.v_gap = []
+        self.v_pos = []
+        for layer in self.layers:
+            self.v_gap.append(self.calculate_gap(box_dim[1], self.node_size, layer.size, frame))
+            l_pos = []
+            for ind in range(len(layer.nodes)):
+                l_pos.append(int(frame + self.v_gap[-1] + self.node_size * 0.5 + ind * (self.v_gap[-1] + self.node_size)))
+            self.v_pos.append(l_pos.copy())
+        print("done")
+
+        self.calibrate_font(txt_box_mult, self.node_size)
+        self.calculate_txt_pos(frame, box_dim)
+        
         for ind, layer in enumerate(self.layers):
-            layer.set_pos(box_dim, gaps, self.node_size, h_pos[ind])
+            layer.set_pos(self.node_size, self.h_pos[ind], self.v_pos[ind], self.offset)
 
     def normalize_values(self):
         min_val = min(self.layers[i].nodes[j].val for i in range(self.layer_number) for j in range(self.layers[i].size))
         min_val = abs(min(min_val, -0.0001))
+        self.min_val = min_val
         max_val = max(self.layers[i].nodes[j].val for i in range(self.layer_number) for j in range(self.layers[i].size))
         max_val = abs(max(max_val, 0.0001))
+        self.max_val = max_val
         return min_val, max_val
 
     def draw_nodes(self, offset):
-        offset = np.array(offset) + int(self.node_size / 2)
+        self.offset = np.array(offset)
         min_val, max_val = self.normalize_values()
         for layer in self.layers:
-            layer.draw_layer(offset, min_val, max_val, self.surface)
+            layer.draw_layer(self.offset, min_val, max_val, self.surface, self.node_img, self.color_img)
 
-    def draw_line(self, prev_node, next_node, val):
+    def draw_line(self, prev_node, next_node, val, min_weight, max_weight):
         x = np.array(prev_node.trans_pos)
+        if val > 0:
+            maximum = max_weight
+            base_color = np.array([0,1,0,0])
+        else:
+            maximum = abs(min_weight)
+            base_color = np.array([1,0,0,0])
+            val = abs(val)
+        max_thickness = 5
+        thick = max(int(max_thickness * val/maximum), 1)
+        color = base_color * int(255 * (val/maximum))
 
-        new_color = (np.array([1,1,1]) * val * 255)
+        #new_color = (np.array([1,1,1]) * abs(val) * 255)
 
-        pygame.draw.line(self.surface, new_color.astype(int), prev_node.trans_pos, next_node.trans_pos, 2)
+        pygame.draw.line(self.surface, color, prev_node.trans_pos, next_node.trans_pos, thick)
 
 
-    def draw_connections(self, mock_val):
+    def draw_connections(self, weights):
+        min_weight = min(weights[i][j][k] for i in range(len(weights)) for j in range(len(weights[i])) for k in range(len(weights[i][j])))
+        max_weight = max(weights[i][j][k] for i in range(len(weights)) for j in range(len(weights[i])) for k in range(len(weights[i][j])))
+        
         for ind in range(self.layer_number-1):
-            for prev_node_ind, prev_node in enumerate(self.layers[ind].nodes):
-                for next_node_ind, next_node in enumerate(self.layers[ind+1].nodes):
-                    val = mock_val[ind][prev_node_ind][next_node_ind]
-                    self.draw_line(prev_node, next_node, val)
+            for next_node_ind, next_node in enumerate(self.layers[ind+1].nodes):
+                for prev_node_ind, prev_node in enumerate(self.layers[ind].nodes):
+                    val = weights[ind][next_node_ind][prev_node_ind]
+                    self.draw_line(prev_node, next_node, val, min_weight, max_weight)
 
     def set_node_val(self, inp):
         for layer_ind,layer in enumerate(self.layers):
             for node_ind,node in enumerate(layer.nodes):
                 node.val = inp[layer_ind][node_ind]
 
-    def display_values(self):
-        font = pygame.font.Font(None, int(self.node_size/2))
-        text_offset_s = np.array([ -int(self.node_size*3/2), -int(self.node_size/8)])
-        text_offset_e = np.array([  int(self.node_size*2/3), -int(self.node_size/8)])
+    def format_text(self, text):
+        if text[0]!="-":
+            text = " " + text
+        while(len(text)<5):
+            text = text + "0"
+        return text
 
-        for node in self.layers[0].nodes:
+    def update_txt_values(self, all_text_boxes, event_flag):
+        if event_flag == True:
+            for ind, node in enumerate(self.layers[0].nodes):
+                text = str(np.around(node.val,2))
+                text = self.format_text(text)
+                all_text_boxes.elems["input_"+str(ind)].update_text(text)
+
+            for ind, node in enumerate(self.layers[-1].nodes):
+                text = str(np.around(node.val,2))
+                text = self.format_text(text)
+                all_text_boxes.elems["output_"+str(ind)].update_text(text)
+
+    def update_inputs(self, all_text_boxes, event_flag, inputs):
+        if(event_flag == True):
+            inputs = []
+            for ind, node in enumerate(self.layers[0].nodes):
+                txtbox_value = all_text_boxes.get_texbox_value("input_"+str(ind))
+                try:
+                    node.val = float(txtbox_value)
+                except:
+                    node.val = 0
+                inputs.append(node.val)
+        return np.array(inputs) 
+
+
+    def setup_text_boxes(self, all_text_boxes):
+        for ind, node in enumerate(self.layers[0].nodes):
             text = str(np.around(node.val,2))
-            if text[0]!="-":
-                text = " " + text
-            
-            txt_surface = font.render(text, True, (255,255,255))
-            screen.blit(txt_surface, node.trans_pos+text_offset_s)
+            text = self.format_text(text)
+            pos = np.array([self.txt_s_h_pos, self.txt_s_v_pos[ind]]) + self.offset
+            all_text_boxes.add_box(pos, "input_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5)
 
-        for node in self.layers[-1].nodes:
+        for ind, node in enumerate(self.layers[-1].nodes):
             text = str(np.around(node.val,2))
-            if text[0]!="-":
-                text = " " + text
-            txt_surface = font.render(text, True, (255,255,255))
-            screen.blit(txt_surface, node.trans_pos+text_offset_e)
+            text = self.format_text(text)
+            pos = np.array([self.txt_e_h_pos, self.txt_e_v_pos[ind]]) + self.offset
+            all_text_boxes.add_box((pos), "output_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5, interact = False )
 
 
-
-def generate_value():
-    return random.random()
-
-def mock_values(inp, hidden, output, rand = False):
-    layers = [inp, *hidden, output]
-    values = []
-    for layer_ind in range(len(layers)-1):
-        tmp_val_mid = []
-        for prev_ind in range(layers[layer_ind]):
-            tmp_val_bot = []
-            for next_ind in range(layers[layer_ind+1]):
-                val = generate_value()
-                tmp_val_bot.append(val)
-            tmp_val_mid.append(tmp_val_bot)
-        values.append(tmp_val_mid)
-    return values
+def draw_others(surface, size, box_dim):
+    rect = pygame.Rect(size[0]-box_dim[0],0,box_dim[0],box_dim[1])
+    pygame_lib.fill_gradient(surface, pygame.Color("lightgray"), pygame.Color("slategray"), rect)
+    pygame.draw.rect(surface, pygame.Color("dimgray"),rect,5)
 
 
 if __name__ == "__main__":
     size = (2000, 1000)
-    box_dim = (600, 400)
-    offset = (size[0]-box_dim[0], 0)
-
-    inputs = 5
-    hidden_layers = [6,6,6,6,6]
-    outputs = 3
+    box_dim = (800, 400)
 
     screen, clock  = pygame_lib.init_pygame(size)
-    my_nn = nn_lib.nn(hidden_layers, inputs, outputs)
-    my_nn.init_weights()
-    my_nn_vis = nn_vis(screen, hidden_layers, inputs,outputs , box_dim)
+    offset = (size[0]-box_dim[0], 0)
     
+    input_number = 5
+    hidden_layers = [3,5]
+    outputs = 3
+    inputs = np.random.uniform(-0.2,0.2,input_number)
 
+    my_nn = nn_lib.nn(hidden_layers, input_number, outputs, True)
 
-    mock_val = mock_values(inputs, hidden_layers, outputs)
-    print("Test")
-    my_nn_vis.draw_nodes(offset)
+    all_text_boxes = pygame_lib.text_boxes(default_centre_text = True)
+    my_nn_vis = nn_vis(screen, hidden_layers, input_number,outputs , offset ,all_text_boxes, box_dim)
+
+    weights = my_nn.extract_weights()
 
     break_flag = False
-
+    event_flag = False
+    start_flag = True
     while 1:
         t = clock.tick(120)
-        print(t)
+        #print(t)
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 break_flag = True
                 pygame.quit()
+            event_flag = all_text_boxes.check_events(event)
                 
         if(break_flag):
             break      
 
         screen.fill((60,60,60 ))
-        output, all_values = my_nn.calculate_output(np.random.uniform(-0.2,0.2,inputs))
-        my_nn_vis.draw_connections(mock_val)
-        my_nn_vis.draw_nodes(offset)
-        my_nn_vis.set_node_val(all_values)
-        
-        my_nn_vis.display_values()
+        draw_others(screen,size,box_dim)
 
-        #pygame.draw.circle(screen, pygame_lib.color.GREEN.value , [100,100],10)
+        inputs = my_nn_vis.update_inputs(all_text_boxes, event_flag, inputs)
+        output, all_values = my_nn.calculate_output(inputs)
+        my_nn_vis.update_and_draw(all_text_boxes, all_values, event_flag or start_flag, weights)
+
+        all_text_boxes.display_boxes(screen)
         pygame.display.flip()
+        start_flag = False
     
     
