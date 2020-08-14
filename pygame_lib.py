@@ -81,6 +81,7 @@ class UI_elem:
         self.interact = params["interact"]
         self.find_height()
         self.update_text(params["text"])
+        self.deactivation_flag = False
         self.set_text_loc()
 
     def find_height(self):
@@ -112,6 +113,9 @@ class UI_elem:
     def change_active(self, new_state):
         self.active = new_state
         self.update_text(self.text)
+
+    def set_deactivation_flag(self):
+        self.deactivation_flag = True
 
     def set_text_loc(self):
         if self.centre_text == False:
@@ -190,7 +194,6 @@ class UI_elems:
             else:
                 return name
 
-
     def parse_default_args(self,**kwargs):
         params = {}
         elem_colors = self.parse_colors(**kwargs)
@@ -225,6 +228,7 @@ class text_boxes(UI_elems):
                         input_box.update_text("")
                     else:
                         input_box.change_active(False)
+
         if event.type == pg.KEYDOWN:
             for input_box in self.elems.values():
                 if input_box.active:

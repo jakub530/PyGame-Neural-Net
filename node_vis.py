@@ -84,6 +84,7 @@ class nn_vis(nn_lib.nn):
         self.draw_connections(mock_val)
         self.draw_nodes(offset)
         self.update_txt_values(txt_boxes)
+        
 
 
     def init_layers(self, h_layers, inputs, outputs, layer_type):
@@ -229,28 +230,21 @@ class nn_vis(nn_lib.nn):
                     text = str(np.around(node.val,2))
                     text = self.format_text(text)
                     all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].update_text(text)
+                #all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].deactivation_flag = False
 
-        #for ind, node in enumerate(self.layers[0].nodes):
-        #    if all_text_boxes.elems["input_"+str(ind)].active == False:
-        #        text = str(np.around(node.val,2))
-        #        text = self.format_text(text)
-        #        all_text_boxes.elems["input_"+str(ind)].update_text(text)
-        #for ind, node in enumerate(self.layers[-1].nodes):
-        #    text = str(np.around(node.val,2))
-        #    text = self.format_text(text)
-        #    all_text_boxes.elems["output_"+str(ind)].update_text(text)
-
-    def update_inputs(self, all_text_boxes, event_flag, inputs):
-        if(event_flag == True):
-            inputs = []
-            for ind, node in enumerate(self.layers[0].nodes):
+    def update_inputs(self, all_text_boxes, old_inputs):
+        
+        inputs = old_inputs.copy()
+        for ind, node in enumerate(self.layers[0].nodes):
+            if all_text_boxes.elems["input_"+str(ind)].active == False:
                 txtbox_value = all_text_boxes.get_texbox_value("input_"+str(ind))
                 try:
                     node.val = float(txtbox_value)
                 except:
                     node.val = 0
-                inputs.append(node.val)
-        return np.array(inputs) 
+                inputs[ind] = node.val
+        
+        return inputs    
 
 
     def setup_text_boxes(self, all_text_boxes):
@@ -312,7 +306,6 @@ if __name__ == "__main__":
 
     my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, 50, 0)
     current_gen = my_nn.generations[global_args["gen_number"]]
-    #my_nn = first_gen[0]
 
     text_boxes = pygame_lib.text_boxes(default_centre_text = True)
     buttons = pygame_lib.buttons()
@@ -334,7 +327,7 @@ if __name__ == "__main__":
             if event.type == pygame.QUIT: 
                 break_flag = True
                 pygame.quit()
-            event_flag = text_boxes.check_events(event)
+            text_boxes.check_events(event)
             buttons.check_events(event, global_args)
                 
         if(break_flag):
@@ -342,8 +335,10 @@ if __name__ == "__main__":
 
         screen.fill((60,60,60 ))
         draw_others(screen,size,box_dim)
-
-        inputs = my_nn_vis.update_inputs(text_boxes, event_flag, inputs)
+        if start_flag == False:
+            inputs = my_nn_vis.update_inputs(text_boxes, inputs)
+        #print(inputs)
+        #inputs = np.random.uniform(-0.2,0.2,input_number)
         output, all_values = current_gen.instances[global_args["inst_number"]].calculate_output(inputs)
         my_nn_vis.update_and_draw(text_boxes, all_values, global_args["weights"])
 
