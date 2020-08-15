@@ -6,8 +6,10 @@ import pygame.freetype
 from pygame_lib import color
 import random
 import copy
+import auto_maze
 
 def set_color(value, min_val, max_val):
+    
     if(value > 0):
         norm_val = (value / max_val) * 255
         return np.array([0, norm_val, 0], dtype=int)
@@ -76,30 +78,28 @@ class nn_vis(nn_lib.nn):
         self.offset = offset
         self.init_layers(h_layers, inputs, outputs, layer_vis)
         self.calculate_grid(box_dim, gaps)
-        self.init_graphics(path)
+        self.init_node_image(path)
         self.setup_text_boxes(text_boxes)
 
     def update_and_draw(self, txt_boxes, values, mock_val):
         self.set_node_val(values)
         self.draw_connections(mock_val)
-        self.draw_nodes(offset)
+        self.draw_nodes(self.offset)
         self.update_txt_values(txt_boxes)
         
-
-
     def init_layers(self, h_layers, inputs, outputs, layer_type):
         super().init_layers(h_layers, inputs, outputs, layer_type)
 
-    def init_graphics(self, path):
+    def init_node_image(self, path):
         node_img = pygame.image.load(path)
         self.node_img = pygame.transform.scale(node_img,(self.node_size,self.node_size))
         self.color_img = pygame.Surface(node_img.get_size()).convert_alpha()  
 
     def calculate_max_size(self, box_dim, gap, frame, inst, txt_box_mult = 0, txt_box_num = 0):
-        full_space = box_dim
-        framed_space = box_dim - 2 * frame
-        space_after_gaps = framed_space - gap * (inst + 1 + txt_box_num) #due to 2 textboxes present
-        max_size = int(space_after_gaps / (inst + txt_box_num * txt_box_mult)) # Assumptiopn that each text box takes 1.5 x node space
+        allocated_space = box_dim
+        framed_space = allocated_space - 2 * frame
+        space_after_gaps = framed_space - gap * (inst + 1 + txt_box_num) 
+        max_size = int(space_after_gaps / (inst + txt_box_num * txt_box_mult)) 
         return max_size
 
     def calculate_gap(self, dim, size, inst, frame, txt_box_mult = 0, txt_box_num = 0):
@@ -107,9 +107,9 @@ class nn_vis(nn_lib.nn):
         gap = int(available_space / (inst + txt_box_num + 1))
         return gap
 
-    def calculate_node_h_pos(self, size, gap, inst, frame, txt_box_mult):
+    def calculate_node_h_pos(self, size, gap, inst, frame, txt_box_mult, txt_box_num):
         #calculates centres of the circles
-        start_offset =  int(frame + 2 * gap + size * (0.5 + txt_box_mult)) # offset by txt_box and radius of circle
+        start_offset =  int(frame + (1 + (txt_box_num-1)) * gap + size * (0.5 + (txt_box_num-1)*txt_box_mult )) # offset by txt_box and radius of circle
         h_pos = [start_offset + i * (gap + size) for i in range(inst)]
         return h_pos
 
@@ -142,7 +142,7 @@ class nn_vis(nn_lib.nn):
 
         return 
 
-    def calculate_grid(self, box_dim, gaps, frame = 5, txt_box_mult = 1.5, txt_box_num = 2):
+    def calculate_grid(self, box_dim, gaps, frame = 5, txt_box_mult = 1.5, txt_box_num = 3):
         self.largest_layer = max(self.layers[i].size for i in range(self.layer_number))
         max_h = self.calculate_max_size(box_dim[0], gaps[0], frame, self.layer_number, txt_box_mult, txt_box_num)
         max_v = self.calculate_max_size(box_dim[1], gaps[1], frame, self.largest_layer)
@@ -150,7 +150,7 @@ class nn_vis(nn_lib.nn):
         self.node_size = min(max_v, max_h)
 
         self.h_gap = self.calculate_gap(box_dim[0], self.node_size, self.layer_number, frame, txt_box_mult, txt_box_num)
-        self.h_pos = self.calculate_node_h_pos(self.node_size, self.h_gap, self.layer_number, frame, txt_box_mult)
+        self.h_pos = self.calculate_node_h_pos(self.node_size, self.h_gap, self.layer_number, frame, txt_box_mult, txt_box_num)
 
         self.v_gap = []
         self.v_pos = []
@@ -160,7 +160,6 @@ class nn_vis(nn_lib.nn):
             for ind in range(len(layer.nodes)):
                 l_pos.append(int(frame + self.v_gap[-1] + self.node_size * 0.5 + ind * (self.v_gap[-1] + self.node_size)))
             self.v_pos.append(l_pos.copy())
-        print("done")
 
         self.calibrate_font(txt_box_mult, self.node_size)
         self.calculate_txt_pos(frame, box_dim)
@@ -170,10 +169,10 @@ class nn_vis(nn_lib.nn):
 
     def normalize_values(self):
         min_val = min(self.layers[i].nodes[j].val for i in range(self.layer_number) for j in range(self.layers[i].size))
-        min_val = abs(min(min_val, -0.0001))
+        min_val = abs(min(min_val, 0.0))
         self.min_val = min_val
         max_val = max(self.layers[i].nodes[j].val for i in range(self.layer_number) for j in range(self.layers[i].size))
-        max_val = abs(max(max_val, 0.0001))
+        max_val = abs(max(max_val, 0.0))
         self.max_val = max_val
         return min_val, max_val
 
@@ -230,7 +229,6 @@ class nn_vis(nn_lib.nn):
                     text = str(np.around(node.val,2))
                     text = self.format_text(text)
                     all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].update_text(text)
-                #all_text_boxes.elems[name[layer_ind]+"_"+str(ind)].deactivation_flag = False
 
     def update_inputs(self, all_text_boxes, old_inputs):
         
@@ -268,16 +266,22 @@ def draw_others(surface, size, box_dim):
     
 
 def change_instance_up(button, global_params):
+    my_nn = global_params["nn"]
+    current_gen = my_nn.generations[global_params["gen_number"]]
+    
     if(global_params["inst_number"] < len(current_gen.instances)-1):
         global_params["inst_number"] = int(global_params["inst_number"]) + 1
-        global_params["weights"] = current_gen.instances[global_args["inst_number"]].extract_weights()
+        global_params["weights"] = current_gen.instances[global_params["inst_number"]].extract_weights()
 
 def change_instance_down(button, global_params):
+    my_nn = global_params["nn"]
+    current_gen = my_nn.generations[global_params["gen_number"]]
+    
     if global_params["inst_number"] > 0 :
         global_params["inst_number"] = int(global_params["inst_number"]) - 1
-        global_params["weights"] = current_gen.instances[global_args["inst_number"]].extract_weights()
+        global_params["weights"] = current_gen.instances[global_params["inst_number"]].extract_weights()
 
-def init_UI(text_boxes):
+def init_UI(text_boxes, buttons):
     text_boxes.add_box((20,20),"gen_label", text = "Generation", interact = False)
     text_boxes.add_box((240,20),"gen_index", global_arg = "gen_number", min_width = 50, interact = False)
     text_boxes.add_box((240,60),"gen_index", global_arg = "inst_number", min_width = 50, interact = False)
@@ -287,29 +291,33 @@ def init_UI(text_boxes):
     buttons.add_box((360, 60),"decrease_inst", change_instance_down, text = "-", min_width = 50, centre_text = True)
 
 
+def main():
+    size = (2560, 1440)
+    box_dim = (1000, 400)
 
-if __name__ == "__main__":
-    size = (2000, 1000)
-    box_dim = (800, 400)
-
-    screen, clock  = pygame_lib.init_pygame(size)
+    screen, clock  = pygame_lib.init_pygame(size,True)
     offset = (size[0]-box_dim[0], 0)
+
+    box = pygame.Rect(0,box_dim[1],2560,size[1]-box_dim[1])
+    game_board = auto_maze.board(box, screen)
+    player_char = auto_maze.player(screen)
     
     global_args = {}
     global_args["inst_number"] = 0
     global_args["gen_number"] = 0
     
-    input_number = 2
+    input_number = 4
     hidden_layers = [4,4,4] 
     outputs = 1
     inputs = np.random.uniform(-0.2,0.2,input_number)
 
     my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, 50, 0)
     current_gen = my_nn.generations[global_args["gen_number"]]
+    global_args["nn"] = my_nn
 
     text_boxes = pygame_lib.text_boxes(default_centre_text = True)
     buttons = pygame_lib.buttons()
-    init_UI(text_boxes)
+    init_UI(text_boxes, buttons)
     
 
     my_nn_vis = nn_vis(screen, hidden_layers, input_number,outputs , offset ,text_boxes, box_dim)
@@ -319,14 +327,19 @@ if __name__ == "__main__":
     break_flag = False
     event_flag = False
     start_flag = True
-    while 1:
-        t = clock.tick(120)
+
+    done = False
+    while not done:
+        t = clock.tick(30)
         global_args["time"] = t
         #print(t)
         for event in pygame.event.get():
             if event.type == pygame.QUIT: 
                 break_flag = True
                 pygame.quit()
+            if event.type == pygame.KEYDOWN:
+                if event.key==pygame.K_ESCAPE:
+                    done = True
             text_boxes.check_events(event)
             buttons.check_events(event, global_args)
                 
@@ -340,11 +353,23 @@ if __name__ == "__main__":
         #print(inputs)
         #inputs = np.random.uniform(-0.2,0.2,input_number)
         output, all_values = current_gen.instances[global_args["inst_number"]].calculate_output(inputs)
+
+        
+
         my_nn_vis.update_and_draw(text_boxes, all_values, global_args["weights"])
 
         text_boxes.display_boxes(screen, global_args)
         buttons.display_boxes(screen, global_args)
+        game_board.draw(player_char.pos[0], player_char.speed[0])
+        #game_board.draw_obstacles(player_char.pos[0], player_char.speed[0])
+        player_char.update()
         pygame.display.flip()
         start_flag = False
+
+
+if __name__ == "__main__":
+    pygame.init()
+    main()
+    pygame.quit()    
     
     

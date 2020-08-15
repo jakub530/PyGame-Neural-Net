@@ -281,9 +281,12 @@ class buttons(UI_elems):
                     button_box.change_active(False)
 
 
-def init_pygame(size):
+def init_pygame(size, fullscreen = False):
     pg.init()
-    screen = pg.display.set_mode(size)
+    if fullscreen:
+        screen = pg.display.set_mode((0, 0), pg.FULLSCREEN) 
+    else:
+        screen = pg.display.set_mode(size)
     clock  = pg.time.Clock()
     return screen, clock
 
