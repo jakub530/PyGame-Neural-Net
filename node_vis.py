@@ -300,18 +300,30 @@ def main():
 
     box = pygame.Rect(0,box_dim[1],2560,size[1]-box_dim[1])
     game_board = auto_maze.board(box, screen)
-    player_char = auto_maze.player(screen)
+    #player_char = auto_maze.player(screen)
     
     global_args = {}
     global_args["inst_number"] = 0
     global_args["gen_number"] = 0
     
-    input_number = 4
-    hidden_layers = [4,4,4] 
+    input_number = 3
+    hidden_layers = [6,6,6,6] 
     outputs = 1
-    inputs = np.random.uniform(-0.2,0.2,input_number)
+    s_inputs = [0,0,0]
+    num_player = 10
 
-    my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, 50, 0)
+    my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, num_player, 0)
+    players = auto_maze.player_cloud(num_player)
+
+    all_inputs = []
+    all_outputs = []
+    all_val = []
+    for ind in range(num_player):
+        all_inputs.append(s_inputs)
+        all_outputs.append(None)
+        all_val.append(None)
+        
+
     current_gen = my_nn.generations[global_args["gen_number"]]
     global_args["nn"] = my_nn
 
@@ -330,7 +342,7 @@ def main():
 
     done = False
     while not done:
-        t = clock.tick(30)
+        t = clock.tick(70)
         global_args["time"] = t
         #print(t)
         for event in pygame.event.get():
@@ -348,21 +360,34 @@ def main():
 
         screen.fill((60,60,60 ))
         draw_others(screen,size,box_dim)
-        if start_flag == False:
-            inputs = my_nn_vis.update_inputs(text_boxes, inputs)
+        #if start_flag == False:
+        #    inputs = my_nn_vis.update_inputs(text_boxes, inputs)
         #print(inputs)
         #inputs = np.random.uniform(-0.2,0.2,input_number)
-        output, all_values = current_gen.instances[global_args["inst_number"]].calculate_output(inputs)
-
+        for n in range(num_player):
+            all_outputs[n], all_val[n] = current_gen.instances[n].calculate_output(all_inputs[n])
         
+        
+        status, all_inputs = players.update_players(screen, game_board, all_outputs,all_inputs)
+        if(status == 0):
+            best_players = players.get_best_players()
+            current_gen.retrain_nn(best_players)
+            players.reset_players()
 
-        my_nn_vis.update_and_draw(text_boxes, all_values, global_args["weights"])
+            # Sort by fitness
+            # Retrain
+            # Reset Pos
+            # Run again
+            print(players.ticks)
+            print("Done")
+
+        my_nn_vis.update_and_draw(text_boxes, all_val[0], global_args["weights"])
 
         text_boxes.display_boxes(screen, global_args)
         buttons.display_boxes(screen, global_args)
-        game_board.draw(player_char.pos[0], player_char.speed[0])
+        game_board.draw(0, 0)
         #game_board.draw_obstacles(player_char.pos[0], player_char.speed[0])
-        player_char.update()
+        #player_char.update()
         pygame.display.flip()
         start_flag = False
 

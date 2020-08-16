@@ -15,7 +15,10 @@ class node:
         self.bias = self.gen_weight() * 0.1
 
     def activation_function(self, inp):
-        return (math.exp(inp)-math.exp(-inp))/(math.exp(inp)+math.exp(-inp))
+        try:
+            return (math.exp(inp)-math.exp(-inp))/(math.exp(inp)+math.exp(-inp))
+        except:
+            print(inp)
         #return math.exp(inp)/(1+math.exp(inp))-0.5
 
     def propagate_value(self,inp):
@@ -112,12 +115,25 @@ class nn_generation:
         for ind in range(inst_count):
             self.instances.append(nn(h_layers, inputs, outputs))
 
+    def retrain_nn(self, best):
+        best_shortlist = best[0:4]
+
+        for ind in range(len(self.instances)):
+            if ind in best_shortlist:
+                pass
+            else:
+                self.instances[ind] = copy.deepcopy(self.instances[random.choice(best_shortlist)])
+                self.instances[ind].modify_weights()
+        
+
 
 
 class nn_tmp:
     def __init__(self, h_layers, inputs, outputs, inst_count, model_values):
         self.generations = [nn_generation(h_layers, inputs, outputs, inst_count)]
         self.model_values = model_values
+
+
 
     def get_model_values(self):
         return model_values
