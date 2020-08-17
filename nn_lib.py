@@ -12,7 +12,7 @@ class node:
 
     def init_weights(self, size):
         self.weights = np.array([self.gen_weight() for i in range(size)])
-        self.bias = self.gen_weight() * 0.1
+        self.bias = self.gen_weight() * 0.01
 
     def activation_function(self, inp):
         try:
@@ -34,8 +34,9 @@ class node:
         return self.activation_function(val)
 
     def modify_weights(self):
-        mod = np.random.uniform(-0.1,0.1,self.weights.size)
-        mod_bias = np.random.uniform(-0.1,0.1)
+        learning_rate = 0.1
+        mod = np.random.uniform(-learning_rate,learning_rate,self.weights.size)
+        mod_bias = np.random.uniform(-learning_rate/100,learning_rate/100)
         self.bias += mod_bias
         self.weights += mod
 
@@ -116,7 +117,7 @@ class nn_generation:
             self.instances.append(nn(h_layers, inputs, outputs))
 
     def retrain_nn(self, best):
-        best_shortlist = best[0:4]
+        best_shortlist = best[0:19]
 
         for ind in range(len(self.instances)):
             if ind in best_shortlist:

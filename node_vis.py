@@ -11,10 +11,10 @@ import auto_maze
 def set_color(value, min_val, max_val):
     
     if(value > 0):
-        norm_val = (value / max_val) * 255
+        norm_val = (value / max(max_val,0.01)) * 255
         return np.array([0, norm_val, 0], dtype=int)
     else:
-        norm_val = (abs(value) / min_val) * 255
+        norm_val = (abs(value) / max(min_val,0.01)) * 255
         return np.array([norm_val, 0, 0], dtype=int)
 
 def transform_color(color):
@@ -295,7 +295,7 @@ def main():
     size = (2560, 1440)
     box_dim = (1000, 400)
 
-    screen, clock  = pygame_lib.init_pygame(size,True)
+    screen, clock  = pygame_lib.init_pygame(size,False)
     offset = (size[0]-box_dim[0], 0)
 
     box = pygame.Rect(0,box_dim[1],2560,size[1]-box_dim[1])
@@ -306,11 +306,11 @@ def main():
     global_args["inst_number"] = 0
     global_args["gen_number"] = 0
     
-    input_number = 3
-    hidden_layers = [6,6,6,6] 
+    input_number = 1
+    hidden_layers = [1] 
     outputs = 1
-    s_inputs = [0,0,0]
-    num_player = 10
+    s_inputs = [0]
+    num_player = 40
 
     my_nn = nn_lib.nn_tmp(hidden_layers, input_number, outputs, num_player, 0)
     players = auto_maze.player_cloud(num_player)
@@ -368,24 +368,25 @@ def main():
             all_outputs[n], all_val[n] = current_gen.instances[n].calculate_output(all_inputs[n])
         
         
-        status, all_inputs = players.update_players(screen, game_board, all_outputs,all_inputs)
+        max_dist, status, all_inputs = players.update_players(screen, game_board, all_outputs,all_inputs)
         if(status == 0):
             best_players = players.get_best_players()
             current_gen.retrain_nn(best_players)
             players.reset_players()
+            game_board.reset()
 
             # Sort by fitness
             # Retrain
             # Reset Pos
             # Run again
-            print(players.ticks)
+            # print(players.ticks)
             print("Done")
 
         my_nn_vis.update_and_draw(text_boxes, all_val[0], global_args["weights"])
 
         text_boxes.display_boxes(screen, global_args)
         buttons.display_boxes(screen, global_args)
-        game_board.draw(0, 0)
+        game_board.draw(max_dist, 10)
         #game_board.draw_obstacles(player_char.pos[0], player_char.speed[0])
         #player_char.update()
         pygame.display.flip()
