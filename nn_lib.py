@@ -134,7 +134,10 @@ class nn_tmp:
         self.generations = [nn_generation(h_layers, inputs, outputs, inst_count)]
         self.model_values = model_values
 
-
+    def advance_generation(self, best_players):
+        new_generation = copy.deepcopy(self.generations[-1])
+        self.generations.append(new_generation)
+        self.generations[-1].retrain_nn(best_players)
 
     def get_model_values(self):
         return model_values

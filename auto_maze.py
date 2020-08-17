@@ -12,7 +12,7 @@ class player:
         self.start_speed =  np.array([10,0])
         self.start_acc =  np.array([0, 0 ])
         self.max_pos = 1000
-        self.size = (50, 50)
+        self.size = (20, 20)
         self.active = True
         
         self.pos = self.start_pos.copy()
@@ -135,10 +135,10 @@ class board:
         self.start_x_pos = 300
         self.start_y_pos = 400
         self.obst_dist_x = 300
-        self.obst_gap_height = 250
+        self.obst_gap_height = 60
         self.player_thershold = 1000
-        self.obst_delta_min_y = self.obst_gap_height*0.5
-        self.obst_delta_max_y = self.obst_gap_height
+        self.obst_delta_min_y = self.obst_gap_height*3
+        self.obst_delta_max_y = self.obst_gap_height*5
     
         self.generate_init_obstacles()
         self.screen = screen

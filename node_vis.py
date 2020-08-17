@@ -281,6 +281,9 @@ def change_instance_down(button, global_params):
         global_params["inst_number"] = int(global_params["inst_number"]) - 1
         global_params["weights"] = current_gen.instances[global_params["inst_number"]].extract_weights()
 
+def advance_gen(button, global_params):
+    global_params["run_gen"] = True
+
 def init_UI(text_boxes, buttons):
     text_boxes.add_box((20,20),"gen_label", text = "Generation", interact = False)
     text_boxes.add_box((240,20),"gen_index", global_arg = "gen_number", min_width = 50, interact = False)
@@ -289,13 +292,14 @@ def init_UI(text_boxes, buttons):
     
     buttons.add_box((300, 60 ),"increase_inst", change_instance_up,   text = "+", min_width = 50, centre_text = True)
     buttons.add_box((360, 60),"decrease_inst", change_instance_down, text = "-", min_width = 50, centre_text = True)
+    buttons.add_box((1280, 340),"advance_gen", advance_gen, text = "Run Single Generation", min_width = 50, centre_text = True)
 
 
 def main():
     size = (2560, 1440)
     box_dim = (1000, 400)
 
-    screen, clock  = pygame_lib.init_pygame(size,False)
+    screen, clock  = pygame_lib.init_pygame(size,True)
     offset = (size[0]-box_dim[0], 0)
 
     box = pygame.Rect(0,box_dim[1],2560,size[1]-box_dim[1])
@@ -307,7 +311,7 @@ def main():
     global_args["gen_number"] = 0
     
     input_number = 1
-    hidden_layers = [1] 
+    hidden_layers = [4,4] 
     outputs = 1
     s_inputs = [0]
     num_player = 40
@@ -326,6 +330,7 @@ def main():
 
     current_gen = my_nn.generations[global_args["gen_number"]]
     global_args["nn"] = my_nn
+    global_args["run_gen"] = False
 
     text_boxes = pygame_lib.text_boxes(default_centre_text = True)
     buttons = pygame_lib.buttons()
@@ -365,24 +370,24 @@ def main():
         #print(inputs)
         #inputs = np.random.uniform(-0.2,0.2,input_number)
         for n in range(num_player):
-            all_outputs[n], all_val[n] = current_gen.instances[n].calculate_output(all_inputs[n])
+            all_outputs[n], all_val[n] = my_nn.generations[global_args["gen_number"]].instances[n].calculate_output(all_inputs[n])
         
         
         max_dist, status, all_inputs = players.update_players(screen, game_board, all_outputs,all_inputs)
         if(status == 0):
-            best_players = players.get_best_players()
-            current_gen.retrain_nn(best_players)
-            players.reset_players()
-            game_board.reset()
+            if(global_args["run_gen"] == True):
+                best_players = players.get_best_players()
 
-            # Sort by fitness
-            # Retrain
-            # Reset Pos
-            # Run again
-            # print(players.ticks)
-            print("Done")
+                #current_gen.retrain_nn(best_players)
+                my_nn.advance_generation(best_players)
+                global_args["gen_number"]+=1
+                players.reset_players()
+                game_board.reset()
 
-        my_nn_vis.update_and_draw(text_boxes, all_val[0], global_args["weights"])
+                global_args["run_gen"] = False
+                print("Done")
+
+        my_nn_vis.update_and_draw(text_boxes, all_val[global_args["inst_number"]], global_args["weights"])
 
         text_boxes.display_boxes(screen, global_args)
         buttons.display_boxes(screen, global_args)
