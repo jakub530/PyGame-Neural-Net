@@ -66,7 +66,7 @@ class UI_elem:
         self.gap = 5
         self.border_width = 2
         self.loc = loc
-        self.global_arg = params["global_arg"]
+        self.parameter = params["global_arg"]
         self.font = pg.font.Font(None, params["font_size"])
         self.colors = colors
         self.use_frame = params["use_frame"]
@@ -125,12 +125,13 @@ class UI_elem:
             free_space_y = self.height - self.txt_surface.get_height()
             self.text_loc = (self.rect.x + int(free_space_x/2), self.rect.y + int(free_space_y/2))
 
-    def display_elem(self, screen, global_args):
-        if self.global_arg != None:
-            if self.global_arg in global_args:
-                self.update_text(str(global_args[self.global_arg]))
+    def display_elem(self, screen, game):
+        if self.parameter != None:
+            if self.parameter in vars(game):
+                self.update_text(str(getattr(game, self.parameter)))
             else:
-                self.update_text("Arg \"{arg}\"not found".format(arg = self.global_arg))
+                self.update_text("Arg \"{arg}\"not found".format(arg = self.parameter))
+        
         if self.use_background:
             if self.use_gradient:
                 fill_gradient(screen, self.colors.colors["background_c"][self.get_active()], self.colors.colors["gradient_c"][self.get_active()], self.rect)
@@ -157,6 +158,7 @@ class UI_elems:
         self.default_interact = True
         self.default_centre_text = False
         self.default_global_arg = None
+         
 
         for elem in vars(self):
             if elem in kwargs:
@@ -206,9 +208,9 @@ class UI_elems:
                     params[arg] = getattr(self, full_arg)
         return params, elem_colors  
 
-    def display_boxes(self, screen, global_args = {}):
+    def display_boxes(self, screen, game):
         for input_box in self.elems.values():
-            input_box.display_elem(screen, global_args)  
+            input_box.display_elem(screen, game)  
 
 class text_boxes(UI_elems):
     def __init__(self, **kwargs):
@@ -253,9 +255,35 @@ class button(UI_elem):
     def __init__(self, loc, colors, params, func, **kwargs):
         super().__init__(loc, colors, params, **kwargs)
         self.func = func
+        self.is_toggle = params["is_toggle"]
+        self.active_text = params["active_text"]
+        self.inactive_text = params["inactive_text"]
+        if self.is_toggle:
+            self.set_toggle_text(self.active)
+
+    def set_toggle_text(self, new_state):
+        if new_state == True:
+            self.text = self.active_text
+            print("Changing to active")
+        else:
+            self.text = self.inactive_text
+            print("Changing to inactive")
+        self.update_text(self.text)
+
+    def change_active(self, new_state):
+        if self.is_toggle == False:
+            super().change_active(new_state)
+        else:
+            self.set_toggle_text(new_state)
+            super().change_active(new_state)
+
+    
 
 class buttons(UI_elems):
     def __init__(self, **kwargs):
+        self.default_is_toggle = False
+        self.default_active_text = ""
+        self.default_inactive_text = ""
         super().__init__(**kwargs)
         #self.default_func = None
 
@@ -267,18 +295,21 @@ class buttons(UI_elems):
         unique_name = super().uniqify_name(button_name)
         self.elems[unique_name] = new_button
 
-    def check_events(self, event, global_args):
+    def check_events(self, event):
         if event.type == pg.MOUSEBUTTONDOWN:
             for button_box in self.elems.values():
                 if button_box.interact == True:
                     if button_box.rect.collidepoint(event.pos):
                         button_box.change_active(not button_box.active)
-                        button_box.func(button_box, global_args)
+                        button_box.func()
 
         if event.type == pg.MOUSEBUTTONUP:
             for button_box in self.elems.values():
-                if button_box.active:
-                    button_box.change_active(False)
+                if button_box.is_toggle:
+                    pass
+                else:
+                    if button_box.active:
+                        button_box.change_active(False)
 
 
 def init_pygame(size, fullscreen = False):

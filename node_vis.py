@@ -73,9 +73,11 @@ class layer_vis(nn_lib.layer):
             node.draw_node(offset, min_val, max_val, surface, img, color_img)
 
 class nn_vis(nn_lib.nn):
-    def __init__(self, surface, h_layers, inputs, outputs, offset, text_boxes, box_dim = (600,400),gaps = (30,10), path = 'Graphics/Node_Grad_2.png'):
+    def __init__(self, surface, h_layers, inputs, outputs, offset, text_boxes, input_names, output_names, box_dim = (600,400),gaps = (30,10), path = 'Graphics/Node_Grad_2.png'):
         self.surface = surface
         self.offset = offset
+        self.input_names = input_names
+        self.output_names = output_names
         self.init_layers(h_layers, inputs, outputs, layer_vis)
         self.calculate_grid(box_dim, gaps)
         self.init_node_image(path)
@@ -109,7 +111,7 @@ class nn_vis(nn_lib.nn):
 
     def calculate_node_h_pos(self, size, gap, inst, frame, txt_box_mult, txt_box_num):
         #calculates centres of the circles
-        start_offset =  int(frame + (1 + (txt_box_num-1)) * gap + size * (0.5 + (txt_box_num-1)*txt_box_mult )) # offset by txt_box and radius of circle
+        start_offset =  int(frame + (1 + (txt_box_num-2)) * gap + size * (0.5 + (txt_box_num-2)*txt_box_mult )) # offset by txt_box and radius of circle
         h_pos = [start_offset + i * (gap + size) for i in range(inst)]
         return h_pos
 
@@ -127,14 +129,16 @@ class nn_vis(nn_lib.nn):
             else:
                 font_size += 1
 
-    def calculate_txt_pos(self, frame, box_dim):
-        self.txt_s_h_pos = frame + self.h_gap # tenatively for now 
+    def calculate_txt_pos(self, frame, box_dim, txt_box_mult):
+        self.i_name_tag_h_pos = frame + self.h_gap
+        self.txt_s_h_pos = frame + self.h_gap *2 + self.node_size * txt_box_mult # tenatively for now 
         self.txt_s_v_pos = []
         for v_pos in self.v_pos[0]:
             tmp_v_pos = v_pos - self.txt_field_size[1] / 2 
             self.txt_s_v_pos.append(tmp_v_pos)
 
         self.txt_e_h_pos = self.h_pos[-1] + self.h_gap + self.node_size/2
+        self.o_name_tag_h_pos = self.txt_e_h_pos + self.h_gap + self.node_size * txt_box_mult
         self.txt_e_v_pos = []
         for v_pos in self.v_pos[-1]:
             tmp_v_pos = v_pos - self.txt_field_size[1] / 2 
@@ -142,7 +146,7 @@ class nn_vis(nn_lib.nn):
 
         return 
 
-    def calculate_grid(self, box_dim, gaps, frame = 5, txt_box_mult = 1.5, txt_box_num = 3):
+    def calculate_grid(self, box_dim, gaps, frame = 5, txt_box_mult = 1.5, txt_box_num = 4):
         self.largest_layer = max(self.layers[i].size for i in range(self.layer_number))
         max_h = self.calculate_max_size(box_dim[0], gaps[0], frame, self.layer_number, txt_box_mult, txt_box_num)
         max_v = self.calculate_max_size(box_dim[1], gaps[1], frame, self.largest_layer)
@@ -162,7 +166,7 @@ class nn_vis(nn_lib.nn):
             self.v_pos.append(l_pos.copy())
 
         self.calibrate_font(txt_box_mult, self.node_size)
-        self.calculate_txt_pos(frame, box_dim)
+        self.calculate_txt_pos(frame, box_dim, txt_box_mult)
         
         for ind, layer in enumerate(self.layers):
             layer.set_pos(self.node_size, self.h_pos[ind], self.v_pos[ind], self.offset)
@@ -251,12 +255,17 @@ class nn_vis(nn_lib.nn):
             text = self.format_text(text)
             pos = np.array([self.txt_s_h_pos, self.txt_s_v_pos[ind]]) + self.offset
             all_text_boxes.add_box(pos, "input_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5)
+            name_tag_pos = np.array([self.i_name_tag_h_pos+self.offset[0],pos[1]])
+            all_text_boxes.add_box(name_tag_pos, "input_name_tag"+str(ind), text = self.input_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5)
 
         for ind, node in enumerate(self.layers[-1].nodes):
             text = str(np.around(node.val,2))
             text = self.format_text(text)
             pos = np.array([self.txt_e_h_pos, self.txt_e_v_pos[ind]]) + self.offset
+            name_tag_pos = np.array([self.o_name_tag_h_pos+self.offset[0],pos[1]])
+
             all_text_boxes.add_box((pos), "output_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5, interact = False )
+            all_text_boxes.add_box(name_tag_pos, "output_name_tag"+str(ind), text = self.output_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5)
 
 
 def draw_others(surface, size, box_dim):

@@ -38,7 +38,7 @@ class player:
     def move_player(self, nn_outputs):
         #print(nn_outputs)
         #self.pos[1] = nn_outputs[0]*500+1000
-        self.speed[1] = nn_outputs[0]*10
+        self.speed[1] = nn_outputs[0]*15
 
 
         if(self.pos[0] > self.max_pos):
@@ -280,6 +280,22 @@ class player_cloud:
         for ind in range(len(self.players)):
             color = list(np.random.choice(range(256), size=3))
             self.colors.append(color)
+
+    def get_next_active_player(self, current_index, reverse = False):
+        start_index = current_index
+        delta = 1
+        if reverse:
+            delta = -1
+        while(True):
+            current_index += delta
+            if current_index < 0 or current_index >= len(self.players):
+                return start_index
+            else:
+                if self.players[current_index].active:
+                    return current_index
+
+            
+
             
     def update_players(self, screen, board, nn_outputs, nn_inputs):
         self.tick+=1
