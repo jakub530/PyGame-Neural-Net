@@ -9,6 +9,7 @@ import random
 import copy
 import auto_maze
 import node_vis
+import generic_game
 
 class main_game:
     def __init__(self):
@@ -21,7 +22,7 @@ class main_game:
         self.game_board = auto_maze.board(self.game_box, self.screen)
 
         self.num_players = 40
-        self.player_cloud = auto_maze.player_cloud(self.num_players)
+        self.player_cloud = generic_game.gen_player_cloud(self.num_players, auto_maze.player)
 
         self.init_nn()
         self.init_UI()
@@ -101,7 +102,9 @@ class main_game:
     def run_game(self): 
         done = False
         while not done:
-            t = self.clock.tick(70)
+            #t = self.clock.tick(70)
+            self.clock.tick(40)
+            #print(self.clock.get_fps())
 
             for event in pg.event.get():
                 if event.type == pg.KEYDOWN:
@@ -115,7 +118,7 @@ class main_game:
             for n in range(self.num_players):
                 self.outputs_arr[n], self.val_arr[n] = self.nn.generations[self.gen_num].instances[n].calculate_output(self.inputs_arr[n])
 
-            max_dist, status, all_inputs = self.player_cloud.update_players(self.screen, self.game_board, self.outputs_arr ,self.inputs_arr)
+            status, all_inputs = self.player_cloud.update_players(self.screen, self.game_board, self.outputs_arr ,self.inputs_arr)
             self.auto_change_instance()
 
             if(status == 0):
@@ -133,7 +136,8 @@ class main_game:
             self.nn_vis.update_and_draw(self.text_boxes, self.val_arr[self.inst_num], self.weights)
             self.text_boxes.display_boxes(self.screen, self)
             self.buttons.display_boxes(self.screen, None)
-            self.game_board.draw(max_dist, 10)
+            self.game_board.draw(self.player_cloud, 10, status)
+            self.player_cloud.draw_players(self.screen)
             pygame.display.flip()
 
 if __name__ == "__main__":

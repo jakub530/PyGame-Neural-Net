@@ -5,75 +5,45 @@ import node_vis
 import pygame as pg
 import random
 import copy
+import generic_game
 
-class player:
+class player(generic_game.gen_player):
     def __init__(self):
         self.start_pos = np.array([50,900])
         self.start_speed =  np.array([10,0])
         self.start_acc =  np.array([0, 0 ])
         self.max_pos = 1000
+        self.y_speed = 12
         self.size = (20, 20)
-        self.active = True
-        
-        self.pos = self.start_pos.copy()
-        self.speed = self.start_speed.copy()
-        self.acc = self.start_acc
+        super().__init__()
 
-    def colision_detection(self, board):
+    def elimination_condition(self, board):
         if self.rect.collidelist(board.rects) != -1:
-            miss_delta_y = board.get_miss_delta(self.pos[0], self.pos[1])
+            #miss_delta_y = board.get_miss_delta(self.pos[0], self.pos[1])
             self.active = False
-            return True, miss_delta_y
-        #if self.pos[0] > 2300:
-        #    self.active = False
-        #    return True,0
+            return True
+        return False
 
-        return False, None
+    def apply_nn_outputs(self, nn_outputs):
+        #Specific
+        self.speed[1] = nn_outputs[0]/abs(nn_outputs[0]) * self.y_speed
+
+    def calculate_score(self, board):
+        miss_delta_y = board.get_miss_delta(self.pos[0], self.pos[1])
+        self.score = self.ticks * 1000 - miss_delta_y
+
+    def apply_specific_movement(self):
+        if(self.pos[0] > self.max_pos):
+            self.speed[0] = 0
+        self.rect = pg.Rect(*self.pos,*self.size)
 
     def update_nn_inputs(self, board):
         input_1 = board.get_y_delta(self.pos[0], self.pos[1])/100
         input_2 = self.speed[1]/10
-        return np.array([input_1])
+        return np.array([input_1])      
 
-    def move_player(self, nn_outputs):
-        #print(nn_outputs)
-        #self.pos[1] = nn_outputs[0]*500+1000
-        self.speed[1] = nn_outputs[0]*15
-
-
-        if(self.pos[0] > self.max_pos):
-            self.speed[0] = 0
-        #        self.pos[1] += self.speed[1]
-        #else:
-        self.pos += self.speed
-        self.rect = pg.Rect(*self.pos,*self.size)
-        self.speed += self.acc
-
-    def reset_player(self):
-        self.active = True
-        self.pos = self.start_pos.copy()
-        self.speed = self.start_speed.copy()
-        self.acc = self.start_acc.copy()
-        
-
-    def update(self, board, screen, nn_outputs, color):
-        #print("Pos is " + str(self.pos))
-        deactivated = False
-        new_nn_inputs = None
-
-        if self.active == True:
-            self.move_player(nn_outputs)    
-            new_nn_inputs = self.update_nn_inputs(board)
-
-            deactivated, smallest_dist = self.colision_detection(board)
-            
-            self.draw(screen, color)
-
-        return deactivated, new_nn_inputs, smallest_dist
-
-    def draw(self, screen, color):
-        pg.draw.rect(screen,color, self.rect)
-
+    def draw(self, screen):
+        pg.draw.rect(screen,self.color, self.rect)
 
 class obstacle:
     def __init__(self, board, pos_centre, width, gap):
@@ -83,8 +53,6 @@ class obstacle:
         self.gap = gap
 
         self.find_real_pos()
-        
-
         self.calculate_rect()
         
     def find_real_pos(self):
@@ -117,12 +85,6 @@ class obstacle:
 
     def __repr__(self):
         return self.r_pos
-
-
-
-
-
-    
 
 class board:
     def __init__(self, rect, screen,**kwargs):
@@ -173,19 +135,26 @@ class board:
             y_pos = self.generate_y_pos(last_obstacle.pos_centre[1])
             self.obstacles.append(obstacle(self, np.array([x_pos,y_pos]), self.obst_width, self.obst_gap_height))
 
-    def draw(self, player_pos, player_speed):
+    def extract_max_pos(self, player_cloud):
+        max_pos = 0
+        for player in player_cloud.players:
+            max_pos = max(max_pos,player.pos[0])
+        return max_pos
+
+    def draw(self, player_cloud, player_speed, status):
         self.draw_border()
-        self.update_obstacles(player_pos, player_speed)
+        max_pos = self.extract_max_pos(player_cloud)
+        self.update_obstacles(max_pos, player_speed,status)
 
     def draw_border(self):
         for border in self.borders:
             pg.draw.rect(self.screen,pg.Color("white"), border)
 
-    def update_obstacles(self, player_pos, player_speed):
+    def update_obstacles(self, player_pos, player_speed, status):
         delete_flag = False
 
         for obstacle in self.obstacles:
-            if player_pos > self.player_thershold:
+            if (player_pos > self.player_thershold) and (status == True):
                 delete_flag = obstacle.move(player_speed)
             obstacle.draw(self.screen)
 
@@ -228,99 +197,6 @@ class board:
             self.add_next_obstacle(self.obstacles[-1])
         self.init_obstacles = copy.deepcopy(self.obstacles)
         self.update_rects()
-
-    
-
-class player_cloud:
-    def __init__ (self, num_players):
-        self.init_players(num_players)
-        self.gen_colors()
-        self.tick = 0
-
-    def init_players(self, num_players):
-        self.active_players_num = num_players
-        self.players = []
-        self.ticks = []
-        self.last_dist = []
-        for index in range(num_players):
-            self.players.append(player())
-            self.ticks.append(0)
-            self.last_dist.append(0)
-
-    def get_best_players(self):
-        scores = np.array(self.ticks)
-        #print(self.last_dist)
-        scores = scores * 1000 - np.array(self.last_dist)
-        arg_sorted_scores = np.argsort(scores)
-        arg_sorted_scores = arg_sorted_scores[::-1]
-        for ind, color_ind in enumerate(arg_sorted_scores):
-            new_color = self.validate_color(255*ind/len(self.players))
-            self.colors[color_ind] = (0,0,new_color)
-            if(ind<20):
-                winner_color = self.validate_color((255 * (20-ind))/20)
-                self.colors[color_ind] = (0,winner_color,0)
-            
-        #print("Tick")
-
-        return arg_sorted_scores
-
-    def reset_players(self):
-        self.tick = 0
-        self.active_players_num = len(self.players)
-        for ind, player in enumerate(self.players):
-            player.reset_player()
-            self.ticks[ind] = 0
-
-    def validate_color(self, ind):
-        val_ind = int(max(min(255,ind),0))
-        return val_ind
-
-    def gen_colors(self):
-        self.colors = []
-        for ind in range(len(self.players)):
-            color = list(np.random.choice(range(256), size=3))
-            self.colors.append(color)
-
-    def get_next_active_player(self, current_index, reverse = False):
-        start_index = current_index
-        delta = 1
-        if reverse:
-            delta = -1
-        while(True):
-            current_index += delta
-            if current_index < 0 or current_index >= len(self.players):
-                return start_index
-            else:
-                if self.players[current_index].active:
-                    return current_index
-
-            
-
-            
-    def update_players(self, screen, board, nn_outputs, nn_inputs):
-        self.tick+=1
-        status = 1
-        max_dist = 0
-
-        for ind, player in enumerate(self.players):
-            if player.active:
-                deactivate_flag, nn_inputs[ind], smallest_dist = player.update(board, screen, nn_outputs[ind], self.colors[ind])
-                max_dist = max(max_dist, player.pos[0])
-                if deactivate_flag:
-                    self.active_players_num -= 1
-                    self.ticks[ind] = self.tick
-                    self.last_dist[ind] = smallest_dist
-
-        if self.active_players_num == 0:
-            status = 0
-
-        return max_dist, status, nn_inputs
-        
-
-
-        
-
-
 
 def main_game():
     done = False

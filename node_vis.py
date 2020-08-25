@@ -256,7 +256,7 @@ class nn_vis(nn_lib.nn):
             pos = np.array([self.txt_s_h_pos, self.txt_s_v_pos[ind]]) + self.offset
             all_text_boxes.add_box(pos, "input_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5)
             name_tag_pos = np.array([self.i_name_tag_h_pos+self.offset[0],pos[1]])
-            all_text_boxes.add_box(name_tag_pos, "input_name_tag"+str(ind), text = self.input_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5)
+            all_text_boxes.add_box(name_tag_pos, "input_name_tag"+str(ind), text = self.input_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5, interact = False)
 
         for ind, node in enumerate(self.layers[-1].nodes):
             text = str(np.around(node.val,2))
@@ -265,7 +265,7 @@ class nn_vis(nn_lib.nn):
             name_tag_pos = np.array([self.o_name_tag_h_pos+self.offset[0],pos[1]])
 
             all_text_boxes.add_box((pos), "output_"+str(ind), text = text, font_size = self.font_size, min_width = self.node_size * 1.5, interact = False )
-            all_text_boxes.add_box(name_tag_pos, "output_name_tag"+str(ind), text = self.output_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5)
+            all_text_boxes.add_box(name_tag_pos, "output_name_tag"+str(ind), text = self.output_names[ind], font_size = self.font_size, min_width = self.node_size * 1.5, interact = False)
 
 
 def draw_others(surface, size, box_dim):
